@@ -1,11 +1,12 @@
 ---
-title: GeoAI Outdoor Activity Assistant
+title: Geoai Outdoor Assistant
 emoji: 🌿
 colorFrom: green
 colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
+license: mit
 ---
 
 # GeoAI Outdoor Activity Assistant 🌿🏞️
@@ -16,34 +17,34 @@ An intelligent, full-stack geospatial AI web application that recommends outdoor
 
 ## 🔗 Live Deployments & Endpoints
 
+- **Hugging Face Space:** [https://huggingface.co/spaces/Sneha3008/Geoai-Outdoor-Assistant](https://huggingface.co/spaces/Sneha3008/Geoai-Outdoor-Assistant)
+- **Live Deployed API Base URL:** `https://sneha3008-geoai-outdoor-assistant.hf.space`
+- **Live API Recommendation Endpoint:** `https://sneha3008-geoai-outdoor-assistant.hf.space/api/recommend`
+- **Live Question / Query Endpoint:** `https://sneha3008-geoai-outdoor-assistant.hf.space/api/ask?q=Can+I+jog+in+Pune+today`
 - **Frontend Website (GitHub Pages):** [https://snehapalhade309-cmyk.github.io/geoai/](https://snehapalhade309-cmyk.github.io/geoai/)
-- **Hugging Face Space:** `https://huggingface.co/spaces/<YOUR_HF_USERNAME>/geoai`
-- **Live Deployed API Base URL:** `https://<YOUR_HF_USERNAME>-geoai.hf.space`
-- **Live API Recommendation Endpoint:** `https://<YOUR_HF_USERNAME>-geoai.hf.space/api/recommend`
-- **Live Question / Query Endpoint:** `https://<YOUR_HF_USERNAME>-geoai.hf.space/api/ask?q=Can+I+jog+in+Pune+today`
 
 ---
 
 ## 📡 API Testing Examples
 
-### 1. Health Status
+### 1. Health Status Check
 ```bash
-curl https://<YOUR_HF_USERNAME>-geoai.hf.space/api/health
+curl https://sneha3008-geoai-outdoor-assistant.hf.space/api/health
 ```
 
 ### 2. Activity Recommendation (GET Query)
 ```bash
-curl "https://<YOUR_HF_USERNAME>-geoai.hf.space/api/recommend?activity=jogging&location=Pune"
+curl "https://sneha3008-geoai-outdoor-assistant.hf.space/api/recommend?activity=jogging&location=Pune"
 ```
 
 ### 3. Natural Language Question Query (GET Query)
 ```bash
-curl "https://<YOUR_HF_USERNAME>-geoai.hf.space/api/ask?q=Can+I+play+cricket+in+Mumbai+tomorrow?"
+curl "https://sneha3008-geoai-outdoor-assistant.hf.space/api/ask?q=Can+I+play+cricket+in+Mumbai+tomorrow?"
 ```
 
 ### 4. Activity Recommendation (POST JSON)
 ```bash
-curl -X POST https://<YOUR_HF_USERNAME>-geoai.hf.space/api/recommend \
+curl -X POST https://sneha3008-geoai-outdoor-assistant.hf.space/api/recommend \
   -H "Content-Type: application/json" \
   -d '{
     "activity": "cycling",
@@ -66,18 +67,3 @@ curl -X POST https://<YOUR_HF_USERNAME>-geoai.hf.space/api/recommend \
 8. **🧺 Picnic**
 9. **🎪 Outdoor Events**
 10. **📸 Photography**
-
----
-
-## 🚀 Local Development
-
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Run locally:**
-   ```bash
-   python app.py
-   ```
-   Server runs at `http://localhost:7860` (or `http://localhost:5000`).
