@@ -1,16 +1,26 @@
 """
 GeoAI Outdoor Activity Assistant - Flask Backend Service
 Provides RESTful APIs for Geocoding, Meteorological Forecasting,
-Air Quality Monitoring, OpenStreetMap Venue Queries, and Activity Suitability Scoring.
+Air Quality Monitoring, OpenStreetMap Venue Queries, Natural Language Query Processing,
+and Activity Suitability Scoring.
 """
 
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory
 import requests
 import os
 import math
+import re
 from datetime import datetime
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+
+# Global CORS Headers for all responses
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
 
 # Configuration
 USER_AGENT = "GeoAI-OutdoorAssistant/1.0 (contact: geoai@example.com)"
@@ -20,6 +30,7 @@ TIMEOUT_SECONDS = 10
 ACTIVITIES_RULES = {
     "jogging": {
         "name": "Jogging",
+        "keywords": ["jog", "jogging", "run", "running", "sprint"],
         "ideal_temp": (14, 22),
         "max_wind": 28,
         "max_precip_prob": 25,
@@ -30,6 +41,7 @@ ACTIVITIES_RULES = {
     },
     "cycling": {
         "name": "Cycling",
+        "keywords": ["cycle", "cycling", "bike", "biking", "bicycle", "ride"],
         "ideal_temp": (15, 26),
         "max_wind": 24,
         "max_precip_prob": 20,
@@ -40,6 +52,7 @@ ACTIVITIES_RULES = {
     },
     "golf": {
         "name": "Golf",
+        "keywords": ["golf", "golfing", "driving range"],
         "ideal_temp": (18, 27),
         "max_wind": 22,
         "max_precip_prob": 15,
@@ -50,6 +63,7 @@ ACTIVITIES_RULES = {
     },
     "cricket": {
         "name": "Cricket",
+        "keywords": ["cricket", "batting", "bowling", "nets"],
         "ideal_temp": (18, 29),
         "max_wind": 25,
         "max_precip_prob": 10,
@@ -60,6 +74,7 @@ ACTIVITIES_RULES = {
     },
     "football": {
         "name": "Football",
+        "keywords": ["football", "soccer", "turf"],
         "ideal_temp": (14, 25),
         "max_wind": 30,
         "max_precip_prob": 30,
@@ -70,6 +85,7 @@ ACTIVITIES_RULES = {
     },
     "tennis": {
         "name": "Tennis",
+        "keywords": ["tennis", "racket", "court"],
         "ideal_temp": (16, 26),
         "max_wind": 18,
         "max_precip_prob": 5,
@@ -80,6 +96,7 @@ ACTIVITIES_RULES = {
     },
     "hiking": {
         "name": "Hiking",
+        "keywords": ["hike", "hiking", "trek", "trekking", "climb"],
         "ideal_temp": (13, 24),
         "max_wind": 32,
         "max_precip_prob": 20,
@@ -90,6 +107,7 @@ ACTIVITIES_RULES = {
     },
     "picnic": {
         "name": "Picnic",
+        "keywords": ["picnic", "outing", "garden", "bbq", "barbecue"],
         "ideal_temp": (18, 27),
         "max_wind": 20,
         "max_precip_prob": 15,
@@ -100,6 +118,7 @@ ACTIVITIES_RULES = {
     },
     "outdoor_events": {
         "name": "Outdoor Events",
+        "keywords": ["event", "concert", "festival", "gathering", "fair", "wedding"],
         "ideal_temp": (18, 28),
         "max_wind": 25,
         "max_precip_prob": 20,
@@ -110,6 +129,7 @@ ACTIVITIES_RULES = {
     },
     "photography": {
         "name": "Photography",
+        "keywords": ["photo", "photography", "photoshoot", "camera", "shooting"],
         "ideal_temp": (12, 28),
         "max_wind": 35,
         "max_precip_prob": 30,
@@ -132,6 +152,57 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return round(R * c, 2)
 
 
+def extract_intent_from_text(text):
+    """Extracts activity and location from a natural language question."""
+    if not text:
+        return "jogging", "Pune"
+    
+    clean_text = text.lower()
+    
+    # 1. Identify Activity
+    found_activity = "jogging"
+    for key, data in ACTIVITIES_RULES.items():
+        for kw in data["keywords"]:
+            if re.search(r'\b' + re.escape(kw) + r'\b', clean_text):
+                found_activity = key
+                break
+        if found_activity != "jogging":
+            break
+            
+    # 2. Extract Location
+    # Look for patterns like "in <City>", "at <City>", "near <City>", "for <City>"
+    loc_match = re.search(r'\b(?:in|at|near|for|around)\s+([a-zA-Z\s]{2,30}?)(?:\?|\.|\,| tomorrow| today| morning| evening| afternoon|$)', text, re.IGNORECASE)
+    if loc_match:
+        found_location = loc_match.group(1).strip()
+    else:
+        # Fallback search common Indian and global cities
+        cities = ["pune", "mumbai", "delhi", "bangalore", "bengaluru", "hyderabad", "chennai", "kolkata", "london", "new york", "paris", "tokyo", "sydney"]
+        found_location = "Pune"
+        for c in cities:
+            if c in clean_text:
+                found_location = c.title()
+                break
+
+    return found_activity, found_location
+
+
+def geocode_location(loc_name):
+    """Helper to convert location string into latitude, longitude, and formatted name."""
+    try:
+        url = f"https://geocoding-api.open-meteo.com/v1/search?name={requests.utils.quote(loc_name)}&count=1&language=en&format=json"
+        resp = requests.get(url, timeout=TIMEOUT_SECONDS, headers={"User-Agent": USER_AGENT})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("results") and len(data["results"]) > 0:
+                first = data["results"][0]
+                name = f"{first['name']}, {first.get('country', '')}"
+                return float(first['latitude']), float(first['longitude']), name
+    except Exception as e:
+        print(f"Geocoding exception: {e}")
+    # Default Pune coordinates
+    return 18.5204, 73.8567, loc_name or "Pune, India"
+
+
 # -------------------------------------------------------------
 # FLASK ROUTES
 # -------------------------------------------------------------
@@ -150,7 +221,15 @@ def health_check():
         "service": "GeoAI Outdoor Activity Assistant Backend",
         "version": "1.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "supported_activities": list(ACTIVITIES_RULES.keys())
+        "supported_activities": list(ACTIVITIES_RULES.keys()),
+        "endpoints": {
+            "health": "/api/health",
+            "recommend": "/api/recommend (GET or POST)",
+            "ask_or_query": "/api/ask?q=... or POST {'question': '...'}",
+            "weather": "/api/weather?lat=...&lon=...",
+            "air_quality": "/api/air-quality?lat=...&lon=...",
+            "places": "/api/places?lat=...&lon=..."
+        }
     })
 
 
@@ -276,24 +355,52 @@ def get_places():
         return jsonify({"places": [], "warning": "Overpass network timed out", "details": str(e)}), 200
 
 
-@app.route('/api/recommend', methods=['POST'])
+@app.route('/api/recommend', methods=['GET', 'POST'])
+@app.route('/api/ask', methods=['GET', 'POST'])
+@app.route('/api/query', methods=['GET', 'POST'])
 def recommend():
     """
     Computes transparent activity suitability score (0-100) based on
     precipitation, temperature comfort curve, wind thresholds, air quality,
     and mapped venues.
+    Accepts:
+    - POST JSON with {activity, location, ...} OR {question: "..."} OR {query: "..."}
+    - GET params with ?activity=...&location=... OR ?q=... OR ?question=...
     """
-    data = request.get_json(silent=True) or {}
-    activity_key = data.get("activity", "jogging").lower()
-    location_name = data.get("location", "Pune, India")
-    radius_km = float(data.get("radius_km", 5))
-    lat = float(data.get("lat", 18.5204))
-    lon = float(data.get("lon", 73.8567))
-    time_window = data.get("time_window", "morning")
+    data = {}
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+    
+    # Merge GET query arguments
+    for k, v in request.args.items():
+        data[k] = v
 
-    rule = ACTIVITIES_RULES.get(activity_key, ACTIVITIES_RULES["jogging"])
+    # Check if a question/query string is passed
+    question_text = data.get("question") or data.get("query") or data.get("q")
+    if question_text:
+        extracted_act, extracted_loc = extract_intent_from_text(question_text)
+        activity_key = data.get("activity") or extracted_act
+        location_name = data.get("location") or extracted_loc
+    else:
+        activity_key = data.get("activity", "jogging").lower()
+        location_name = data.get("location", "Pune, India")
 
-    # 1. Fetch weather & air quality
+    radius_km = float(data.get("radius_km", data.get("radius", 5)))
+    time_window = data.get("time_window", data.get("time", "morning"))
+
+    # Resolve coordinates
+    if "lat" in data and "lon" in data:
+        try:
+            lat = float(data["lat"])
+            lon = float(data["lon"])
+        except ValueError:
+            lat, lon, location_name = geocode_location(location_name)
+    else:
+        lat, lon, location_name = geocode_location(location_name)
+
+    rule = ACTIVITIES_RULES.get(activity_key.lower(), ACTIVITIES_RULES["jogging"])
+
+    # 1. Fetch live weather & air quality from Open-Meteo
     weather_url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
         "&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m"
@@ -416,20 +523,24 @@ def recommend():
     verdict = "Excellent" if best_slot["total_score"] >= 85 else ("Good" if best_slot["total_score"] >= 70 else ("Marginal" if best_slot["total_score"] >= 50 else "Avoid"))
 
     explanation = (
-        f"At {best_slot['time_str']}, atmospheric conditions for {rule['name']} are rated {verdict.lower()} "
-        f"({best_slot['total_score']}/100). Temperature is {best_slot['temperature_c']}°C, "
-        f"rain risk is {best_slot['precipitation_prob']}%, wind speed is {best_slot['wind_kmh']} km/h, "
-        f"and European AQI is {best_slot['aqi']}."
+        f"At {best_slot['time_str']}, atmospheric conditions for {rule['name']} in {location_name} are rated {verdict.upper()} "
+        f"with a suitability score of {best_slot['total_score']}/100. The forecast indicates a temperature of {best_slot['temperature_c']}°C, "
+        f"{best_slot['precipitation_prob']}% precipitation probability, wind speed of {best_slot['wind_kmh']} km/h, "
+        f"and European Air Quality Index of {best_slot['aqi']}."
     )
+
+    answer = f"Yes! {explanation}" if best_slot["total_score"] >= 70 else f"Caution advised. {explanation}"
 
     return jsonify({
         "status": "success",
         "activity": rule["name"],
         "location": location_name,
         "coordinates": {"latitude": lat, "longitude": lon},
-        "best_slot": best_slot,
+        "suitability_score": best_slot["total_score"],
         "verdict": verdict,
+        "answer": answer,
         "explanation": explanation,
+        "best_slot": best_slot,
         "hourly_breakdown": evaluated_hours,
         "gear_checklist": rule["gear"],
         "safety_precautions": rule["precautions"],
@@ -442,6 +553,7 @@ def recommend():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 GeoAI Outdoor Activity Assistant running at http://localhost:{port}")
+    # Default to 7860 (Hugging Face standard) or PORT env var
+    port = int(os.environ.get("PORT", 7860))
+    print(f"🚀 GeoAI Outdoor Activity Assistant running at http://0.0.0.0:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)
