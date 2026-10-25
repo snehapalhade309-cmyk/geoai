@@ -3,8 +3,9 @@ title: Geoai Outdoor Assistant
 emoji: 🌿
 colorFrom: green
 colorTo: blue
-sdk: docker
-app_port: 7860
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
 pinned: false
 license: mit
 ---
@@ -49,21 +50,6 @@ curl -X POST https://sneha3008-geoai-outdoor-assistant.hf.space/api/recommend \
   -d '{
     "activity": "cycling",
     "location": "Pune, India",
-    "radius_km": 5,
     "time_window": "morning"
   }'
 ```
-
----
-
-## 🎨 Supported Activities (10 Sports & Pastimes)
-1. **🏃 Jogging**
-2. **🚴 Cycling**
-3. **⛳ Golf**
-4. **🏏 Cricket**
-5. **⚽ Football**
-6. **🎾 Tennis**
-7. **🥾 Hiking**
-8. **🧺 Picnic**
-9. **🎪 Outdoor Events**
-10. **📸 Photography**
